@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>DOD Tracker</title>
+  <style>
+    body { font-family: Arial; margin: 20px; background: #f5f5f5; }
+    input, textarea { padding: 8px; margin: 5px; width: 200px; }
+    textarea { width: 400px; height: 80px; }
+    button { padding: 10px 15px; margin: 5px; cursor: pointer; }
+    table { width: 100%; margin-top: 15px; border-collapse: collapse; background: white; }
+    th, td { border: 1px solid #ddd; padding: 8px; }
+    #report { white-space: pre-wrap; background: black; color: white; padding: 15px; margin-top: 20px; }
+  </style>
+</head>
+
+<body>
+
+<h2>DOD Tracker</h2>
+
+<label>Manager:</label>
+<input id="manager" value="Karthik">
+
+<label>Date:</label>
+<input type="date" id="date">
+
+<h3>Add Order</h3>
+
+<input id="orderId" placeholder="Order ID">
+<input id="delay" type="number" placeholder="Delay (minutes)">
+<input id="reason" placeholder="Reason">
+<input id="action" placeholder="Action taken">
+<input id="notes" placeholder="Extra notes">
+
+<label>No Show / Outlier</label>
+<input type="checkbox" id="noshow">
+
+<br>
+
+<button onclick="addOrder()">Add Order</button>
+
+<table id="ordersTable">
+  <tr>
+    <th>Order</th>
+    <th>Delay</th>
+    <th>Reason</th>
+    <th>Action</th>
+    <th>No Show</th>
+  </tr>
+</table>
+
+<h3>General Notes</h3>
+<textarea id="generalNotes"></textarea>
+
+<br>
+
+<label>Total Orders:</label>
+<input id="totalOrders" type="number">
+
+<br>
+
+<button onclick="generateReport()">Generate Report</button>
+<button onclick="copyReport()">Copy</button>
+
+<div id="report"></div>
+
+<script>
+let orders = [];
+
+function formatDate(dateStr) {
+  const d = new Date(dateStr);
+  return d.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric"
+  }).replace(/ /g, "-");
+}
+
+function addOrder() {
+  const order = {
+    id: document.getElementById("orderId").value,
+    delay: parseInt(document.getElementById("delay").value) || 0,
+    reason: document.getElementById("reason").value,
+    action: document.getElementById("action").value,
+    notes: document.getElementById("notes").value,
+    noshow: document.getElementById("noshow").checked
+  };
+
+  orders.push(order);
+  renderTable();
+}
+
+function renderTable() {
+  const table = document.getElementById("ordersTable");
+  table.innerHTML = `
+    <tr>
+      <th>Order</th>
+      <th>Delay</th>
+      <th>Reason</th>
+      <th>Action</th>
+      <th>No Show</th>
+    </tr>
+  `;
+
+  orders.forEach(o => {
+    table.innerHTML += `
+      <tr>
+        <td>${o.id}</td>
+        <td>${o.delay}</td>
+        <td>${o.reason}</td>
+        <td>${o.action}</td>
+        <td>${o.noshow ? "Yes" : "No"}</td>
+      </tr>
+    `;
+  });
+}
+
+function generateReport() {
+  const manager = document.getElementById("manager").value;
+  const date = formatDate(document.getElementById("date").value);
+  const total = parseInt(document.getElementById("totalOrders").value) || 0;
+  const generalNotes = document.getElementById("generalNotes").value;
+
+  const lateOrders = orders.filter(o => o.delay > 0 && !o.noshow);
+  const noShows = orders.filter(o => o.noshow);
+
+  const lateCount = lateOrders.length;
+  const onTime = total - lateCount - noShows.length;
+  const percent = total ? Math.round((onTime / total) * 100) : 0;
+
+  let report = `@${manager}
+Date: ${date}
+Total babysitting orders: ${total}
+Count of late: ${lateCount}
+`;
+
+  if (noShows.length > 0) {
+    report += `${noShows.length} Order${noShows.length > 1 ? "s" : ""}: No show\n`;
+  }
+
+  report += `% of on time: ${percent}%\n\n`;
+
+  // Late section
+  if (lateOrders.length > 0) {
+    report += `Reason for late:\n\n`;
+    lateOrders.forEach(o => {
+      report += `${o.delay} minutes late - ${o.id} - ${o.reason}. ${o.action} ${o.notes}\n\n`;
+    });
+  }
+
+  // Outlier section
+  if (noShows.length > 0) {
+    report += `Outlier Order${noShows.length > 1 ? "s" : ""}: No show\n\n`;
+    noShows.forEach(o => {
+      report += `${o.id} - ${o.reason}. ${o.action} ${o.notes}\n\n`;
+    });
+  }
+
+  if (generalNotes) {
+    report += generalNotes;
+  }
+
+  document.getElementById("report").innerText = report;
+}
+
+function copyReport() {
+  const text = document.getElementById("report").innerText;
+  navigator.clipboard.writeText(text);
+  alert("Copied!");
+}
+</script>
+
+</body>
+</html>
