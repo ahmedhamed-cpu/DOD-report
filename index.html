@@ -1,78 +1,24 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>DOD Tracker</title>
-  <style>
-    body { font-family: Arial; margin: 20px; background: #f5f5f5; }
-    input, textarea { padding: 8px; margin: 5px; width: 200px; }
-    textarea { width: 400px; height: 80px; }
-    button { padding: 10px 15px; margin: 5px; cursor: pointer; }
-    table { width: 100%; margin-top: 15px; border-collapse: collapse; background: white; }
-    th, td { border: 1px solid #ddd; padding: 8px; }
-    #report { white-space: pre-wrap; background: black; color: white; padding: 15px; margin-top: 20px; }
-  </style>
-</head>
-
-<body>
-
-<h2>DOD Tracker</h2>
-
-<label>Manager:</label>
-<input id="manager" value="Karthik">
-
-<label>Date:</label>
-<input type="date" id="date">
-
-<h3>Add Order</h3>
-
-<input id="orderId" placeholder="Order ID">
-<input id="delay" type="number" placeholder="Delay (minutes)">
-<input id="reason" placeholder="Reason">
-<input id="action" placeholder="Action taken">
-<input id="notes" placeholder="Extra notes">
-
-<label>No Show / Outlier</label>
-<input type="checkbox" id="noshow">
-
-<br>
-
-<button onclick="addOrder()">Add Order</button>
-
-<table id="ordersTable">
-  <tr>
-    <th>Order</th>
-    <th>Delay</th>
-    <th>Reason</th>
-    <th>Action</th>
-    <th>No Show</th>
-  </tr>
-</table>
-
-<h3>General Notes</h3>
-<textarea id="generalNotes"></textarea>
-
-<br>
-
-<label>Total Orders:</label>
-<input id="totalOrders" type="number">
-
-<br>
-
-<button onclick="generateReport()">Generate Report</button>
-<button onclick="copyReport()">Copy</button>
-
-<div id="report"></div>
-
 <script>
 let orders = [];
+const STORAGE_KEY = "dod_tracker_data";
 
-function formatDate(dateStr) {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric"
-  }).replace(/ /g, "-");
+// Load data on startup
+window.onload = function () {
+  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+  const today = document.getElementById("date").value;
+
+  if (saved[today]) {
+    orders = saved[today];
+    renderTable();
+  }
+};
+
+// Save data
+function saveData() {
+  const date = document.getElementById("date").value;
+  let saved = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+  saved[date] = orders;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
 }
 
 function addOrder() {
@@ -86,6 +32,7 @@ function addOrder() {
   };
 
   orders.push(order);
+  saveData();
   renderTable();
 }
 
@@ -114,6 +61,39 @@ function renderTable() {
   });
 }
 
+// Clear current day
+function clearDay() {
+  if (!confirm("Clear all data for this day?")) return;
+
+  const date = document.getElementById("date").value;
+  let saved = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+
+  delete saved[date];
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+
+  orders = [];
+  renderTable();
+  document.getElementById("report").innerText = "";
+}
+
+// Update data when date changes
+document.getElementById("date").addEventListener("change", () => {
+  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+  const date = document.getElementById("date").value;
+
+  orders = saved[date] || [];
+  renderTable();
+});
+
+function formatDate(dateStr) {
+  const d = new Date(dateStr);
+  return d.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric"
+  }).replace(/ /g, "-");
+}
+
 function generateReport() {
   const manager = document.getElementById("manager").value;
   const date = formatDate(document.getElementById("date").value);
@@ -139,7 +119,6 @@ Count of late: ${lateCount}
 
   report += `% of on time: ${percent}%\n\n`;
 
-  // Late section
   if (lateOrders.length > 0) {
     report += `Reason for late:\n\n`;
     lateOrders.forEach(o => {
@@ -147,7 +126,6 @@ Count of late: ${lateCount}
     });
   }
 
-  // Outlier section
   if (noShows.length > 0) {
     report += `Outlier Order${noShows.length > 1 ? "s" : ""}: No show\n\n`;
     noShows.forEach(o => {
@@ -168,6 +146,3 @@ function copyReport() {
   alert("Copied!");
 }
 </script>
-
-</body>
-</html>
