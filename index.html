@@ -1,148 +1,819 @@
-<script>
-let orders = [];
-const STORAGE_KEY = "dod_tracker_data";
-
-// Load data on startup
-window.onload = function () {
-  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
-  const today = document.getElementById("date").value;
-
-  if (saved[today]) {
-    orders = saved[today];
-    renderTable();
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DOD Tracker — Feelvaleo Operations</title>
+<style>
+  :root {
+    --bg: #F7F6F3;
+    --surface: #FFFFFF;
+    --surface2: #F0EEE9;
+    --border: #E2DDD6;
+    --border-strong: #C9C3BA;
+    --text: #1A1917;
+    --text2: #6B6560;
+    --text3: #9E9890;
+    --blue: #185FA5;
+    --blue-light: #E6F1FB;
+    --blue-text: #0C447C;
+    --green: #3B6D11;
+    --green-light: #EAF3DE;
+    --red: #A32D2D;
+    --red-light: #FCEBEB;
+    --amber: #854F0B;
+    --amber-light: #FAEEDA;
+    --radius: 10px;
+    --radius-sm: 6px;
+    --shadow: 0 1px 3px rgba(0,0,0,.07), 0 1px 2px rgba(0,0,0,.05);
+    --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    --mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
   }
-};
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; }
 
-// Save data
+  /* ── Layout ── */
+  .shell { max-width: 900px; margin: 0 auto; padding: 0 20px 60px; }
+
+  /* ── Header ── */
+  .header { padding: 28px 0 24px; border-bottom: 1px solid var(--border); margin-bottom: 28px; display: flex; align-items: center; justify-content: space-between; }
+  .header-left { display: flex; align-items: center; gap: 14px; }
+  .logo { width: 38px; height: 38px; background: var(--blue); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; }
+  .logo svg { width: 20px; height: 20px; fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .brand { font-size: 17px; font-weight: 600; letter-spacing: -.3px; }
+  .brand span { color: var(--blue); }
+  .date-badge { font-size: 13px; color: var(--text2); background: var(--surface2); padding: 5px 12px; border-radius: 20px; border: 1px solid var(--border); }
+
+  /* ── Tabs ── */
+  .tab-row { display: flex; gap: 2px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 4px; margin-bottom: 24px; }
+  .tab { flex: 1; background: none; border: none; padding: 9px 8px; font-size: 14px; font-family: var(--font); color: var(--text2); cursor: pointer; border-radius: 7px; display: flex; align-items: center; justify-content: center; gap: 7px; transition: all .15s; font-weight: 500; }
+  .tab svg { width: 16px; height: 16px; flex-shrink: 0; }
+  .tab.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+  .tab .badge { background: var(--blue); color: #fff; font-size: 11px; padding: 1px 6px; border-radius: 10px; font-weight: 600; min-width: 18px; text-align: center; }
+  .tab.active .badge { background: var(--blue); }
+
+  /* ── Panes ── */
+  .pane { display: none; }
+  .pane.active { display: block; }
+
+  /* ── Card ── */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px 24px; margin-bottom: 16px; box-shadow: var(--shadow); }
+  .card-title { font-size: 16px; font-weight: 600; margin-bottom: 3px; letter-spacing: -.2px; }
+  .card-sub { font-size: 13px; color: var(--text2); margin-bottom: 20px; line-height: 1.5; }
+
+  /* ── Form ── */
+  .g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .g3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+  .field { margin-bottom: 14px; }
+  .field:last-child { margin-bottom: 0; }
+  label { display: block; font-size: 12px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
+  input[type=text], input[type=number], input[type=time], input[type=date], select, textarea {
+    width: 100%; font-family: var(--font); font-size: 14px; color: var(--text);
+    background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+    padding: 9px 12px; transition: border-color .15s, box-shadow .15s; appearance: none;
+  }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(24,95,165,.12); }
+  textarea { resize: vertical; min-height: 72px; line-height: 1.5; }
+  select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='none' stroke='%236B6560' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' d='M1 1l5 5 5-5'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; }
+
+  /* ── Delay section ── */
+  .delay-block { border-top: 1px dashed var(--border); margin-top: 16px; padding-top: 16px; transition: opacity .2s; }
+  .delay-block.dimmed { opacity: .35; pointer-events: none; }
+  .delay-block-label { font-size: 11px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 14px; display: flex; align-items: center; gap: 6px; }
+
+  /* ── Buttons ── */
+  .btn { display: inline-flex; align-items: center; gap: 7px; font-family: var(--font); font-size: 14px; font-weight: 500; cursor: pointer; border-radius: var(--radius-sm); padding: 9px 18px; transition: all .15s; border: 1px solid transparent; }
+  .btn svg { width: 16px; height: 16px; flex-shrink: 0; }
+  .btn-blue { background: var(--blue); color: #fff; }
+  .btn-blue:hover { background: var(--blue-text); }
+  .btn-ghost { background: var(--surface); color: var(--text); border-color: var(--border-strong); }
+  .btn-ghost:hover { background: var(--surface2); }
+  .btn-danger { background: var(--surface); color: var(--red); border-color: var(--border); font-size: 12px; padding: 6px 12px; }
+  .btn-danger:hover { background: var(--red-light); border-color: var(--red); }
+  .btn:disabled { opacity: .45; cursor: default; pointer-events: none; }
+  .btn-ai { background: linear-gradient(135deg, #185FA5 0%, #7C3AED 100%); color: #fff; border: none; }
+  .btn-ai:hover { opacity: .9; }
+  .btn-row { display: flex; gap: 10px; align-items: center; margin-top: 18px; flex-wrap: wrap; }
+
+  /* ── Flash message ── */
+  .flash { font-size: 13px; font-weight: 500; }
+  .flash.ok { color: var(--green); }
+  .flash.err { color: var(--red); }
+
+  /* ── Metrics ── */
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+  .metric { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; box-shadow: var(--shadow); }
+  .metric-label { font-size: 12px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
+  .metric-val { font-size: 26px; font-weight: 700; letter-spacing: -.5px; }
+  .metric-val.red { color: var(--red); }
+  .metric-val.green { color: var(--green); }
+  .metric-val.amber { color: var(--amber); }
+
+  /* ── Table ── */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th { font-size: 11px; font-weight: 700; color: var(--text2); text-transform: uppercase; letter-spacing: .05em; padding: 8px 12px; border-bottom: 1px solid var(--border); text-align: left; background: var(--surface2); }
+  tbody tr { border-bottom: 1px solid var(--border); }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--surface2); }
+  tbody td { padding: 11px 12px; vertical-align: top; }
+  .td-id { font-weight: 600; font-size: 13px; white-space: nowrap; }
+  .td-cell { color: var(--text2); line-height: 1.4; }
+  .td-del button { background: none; border: none; cursor: pointer; color: var(--text3); padding: 2px 4px; border-radius: 4px; transition: color .1s; }
+  .td-del button:hover { color: var(--red); }
+
+  /* ── Badges ── */
+  .badge-late { display: inline-flex; align-items: center; gap: 5px; background: var(--red-light); color: var(--red); font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 20px; white-space: nowrap; }
+  .badge-ok { display: inline-flex; align-items: center; gap: 5px; background: var(--green-light); color: var(--green); font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 20px; }
+  .badge-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+
+  /* ── Empty state ── */
+  .empty { text-align: center; padding: 48px 20px; color: var(--text2); }
+  .empty-icon { font-size: 32px; margin-bottom: 10px; }
+  .empty h3 { font-size: 15px; font-weight: 600; margin-bottom: 4px; color: var(--text); }
+  .empty p { font-size: 13px; }
+
+  /* ── Warn box ── */
+  .warn-box { font-size: 13px; color: var(--red); background: var(--red-light); border: 1px solid #F7C1C1; border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 14px; }
+  .info-box { font-size: 13px; color: var(--blue-text); background: var(--blue-light); border: 1px solid #B5D4F4; border-radius: var(--radius-sm); padding: 10px 14px; margin-top: 12px; }
+
+  /* ── Report output ── */
+  .report-box { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; font-family: var(--mono); font-size: 12.5px; line-height: 1.8; white-space: pre-wrap; color: var(--text); max-height: 520px; overflow-y: auto; margin-top: 16px; }
+  .report-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 12px; }
+
+  /* ── AI loading ── */
+  .ai-loader { display: none; align-items: center; gap: 12px; padding: 18px 20px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); margin-top: 16px; font-size: 14px; color: var(--text2); }
+  .ai-loader.show { display: flex; }
+  .spinner { width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--blue); border-radius: 50%; animation: spin .7s linear infinite; flex-shrink: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Section divider ── */
+  .divider { border: none; border-top: 1px solid var(--border); margin: 22px 0; }
+
+  /* ── API key section ── */
+  .apikey-row { display: flex; gap: 10px; align-items: flex-end; }
+  .apikey-row .field { flex: 1; margin-bottom: 0; }
+  .api-status { font-size: 12px; margin-top: 6px; }
+  .api-status.ok { color: var(--green); font-weight: 600; }
+  .api-status.err { color: var(--red); }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+
+  @media (max-width: 640px) {
+    .metrics { grid-template-columns: 1fr 1fr; }
+    .g2, .g3 { grid-template-columns: 1fr; }
+    .header { flex-direction: column; align-items: flex-start; gap: 10px; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-left">
+      <div class="logo">
+        <svg viewBox="0 0 24 24"><path d="M9 17H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v3"/><path d="M13 21l4-4-4-4"/><path d="M21 13h-8"/></svg>
+      </div>
+      <div>
+        <div class="brand">Feelvaleo <span>DOD Tracker</span></div>
+        <div style="font-size:12px;color:var(--text2);margin-top:1px">Daily Operations Delay Report</div>
+      </div>
+    </div>
+    <div class="date-badge" id="header-date"></div>
+  </header>
+
+  <!-- Tabs -->
+  <div class="tab-row">
+    <button class="tab active" onclick="showTab('log',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Log Incident
+    </button>
+    <button class="tab" onclick="showTab('review',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+      All Incidents <span class="badge" id="cnt-badge">0</span>
+    </button>
+    <button class="tab" onclick="showTab('report',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10,9 9,9 8,9"/></svg>
+      Generate Report
+    </button>
+    <button class="tab" onclick="showTab('settings',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+      Settings
+    </button>
+  </div>
+
+  <!-- ═══════════════════════════════ LOG TAB ═══════════════════════════════ -->
+  <div id="pane-log" class="pane active">
+    <div class="card">
+      <div class="card-title">Log an incident</div>
+      <div class="card-sub">Fill in what you know — you can be rough with the data, the AI will clean it up at report time. Add as many incidents as they happen throughout the day.</div>
+
+      <div class="g2">
+        <div class="field">
+          <label>Order ID</label>
+          <input type="text" id="f-id" placeholder="e.g. ORD-514-51550">
+        </div>
+        <div class="field">
+          <label>Status</label>
+          <select id="f-status" onchange="toggleDelay()">
+            <option value="on_time">On time</option>
+            <option value="late">Late / delayed</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="g2">
+        <div class="field">
+          <label>Scheduled time</label>
+          <input type="time" id="f-sched">
+        </div>
+        <div class="field">
+          <label>Actual delivery time</label>
+          <input type="time" id="f-actual">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Partner / service provider (optional)</label>
+        <input type="text" id="f-partner" placeholder="e.g. Wareed Lab, babysitter name">
+      </div>
+
+      <!-- Delay block -->
+      <div class="delay-block dimmed" id="delay-block">
+        <div class="delay-block-label">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          Delay details
+        </div>
+        <div class="g2">
+          <div class="field">
+            <label>Delay in minutes</label>
+            <input type="number" id="f-mins" min="1" placeholder="Auto-calc if times filled in">
+          </div>
+          <div class="field">
+            <label>Reason category</label>
+            <select id="f-reason">
+              <option value="">Select reason...</option>
+              <option>Traffic / route issue</option>
+              <option>Babysitter no-show</option>
+              <option>Customer not reachable</option>
+              <option>Late babysitter assignment</option>
+              <option>System / app issue</option>
+              <option>Weather conditions</option>
+              <option>Partner underperformance</option>
+              <option>Other</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Reason detail — dump anything here, even messy</label>
+          <input type="text" id="f-reason-detail" placeholder="e.g. bb called in sick last min, no replacement until 20 min later">
+        </div>
+        <div class="g2">
+          <div class="field">
+            <label>Action taken</label>
+            <select id="f-action">
+              <option value="">Select action...</option>
+              <option>Replacement babysitter dispatched</option>
+              <option>Customer notified and compensated</option>
+              <option>Customer notified, no compensation</option>
+              <option>Order rescheduled</option>
+              <option>Charge deduction applied to partner</option>
+              <option>Escalated to management</option>
+              <option>Monitoring, no action needed</option>
+              <option>Other</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Action detail</label>
+            <input type="text" id="f-action-detail" placeholder="e.g. replacement confirmed, ETA 20 min">
+          </div>
+        </div>
+      </div>
+
+      <div class="field" style="margin-top:14px">
+        <label>Extra notes — anything else, raw is fine</label>
+        <textarea id="f-notes" placeholder="Any extra context, observations, or follow-up needed..."></textarea>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-blue" onclick="addOrder()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Save incident
+        </button>
+        <button class="btn btn-ghost" onclick="clearForm()">Clear form</button>
+        <span id="flash" class="flash"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════ REVIEW TAB ═══════════════════════════════ -->
+  <div id="pane-review" class="pane">
+    <div class="metrics">
+      <div class="metric">
+        <div class="metric-label">Total orders</div>
+        <div class="metric-val" id="m-total">0</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Late orders</div>
+        <div class="metric-val red" id="m-late">0</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">On-time rate</div>
+        <div class="metric-val green" id="m-pct">--</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Avg delay</div>
+        <div class="metric-val amber" id="m-avg">--</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+        <div>
+          <div class="card-title">Incident log</div>
+          <div style="font-size:13px;color:var(--text2);margin-top:2px">All incidents logged today</div>
+        </div>
+        <button class="btn btn-danger" onclick="clearAll()">Clear all</button>
+      </div>
+      <div id="order-list"></div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════ REPORT TAB ═══════════════════════════════ -->
+  <div id="pane-report" class="pane">
+    <div class="card">
+      <div class="card-title">Report settings</div>
+      <div class="card-sub">Fill in the details, then generate your report. Use the AI report for a polished, professional output sent directly to your manager.</div>
+
+      <div class="g3">
+        <div class="field">
+          <label>Report date</label>
+          <input type="date" id="r-date">
+        </div>
+        <div class="field">
+          <label>Prepared by</label>
+          <input type="text" id="r-name" placeholder="Ahmed">
+        </div>
+        <div class="field">
+          <label>Shift</label>
+          <select id="r-shift">
+            <option>Full day</option>
+            <option>Morning shift</option>
+            <option>Evening shift</option>
+            <option>Night shift</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Manager / recipient name (for AI report)</label>
+        <input type="text" id="r-manager" placeholder="e.g. Karthik, Minahil">
+      </div>
+      <div class="field">
+        <label>General notes — any observations, patterns, or escalations</label>
+        <textarea id="r-notes" placeholder="e.g. Wareed Lab continues to underperform on Dammam compound. Third delay this week. Recommending charge deduction review."></textarea>
+      </div>
+
+      <div id="no-orders-warn" class="warn-box" style="display:none">
+        No incidents logged yet. Go to the Log Incident tab and add your orders first.
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-ai" id="btn-ai-report" onclick="generateAIReport()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          Generate AI Report
+        </button>
+        <button class="btn btn-ghost" id="btn-plain-report" onclick="generatePlainReport()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+          Plain text report
+        </button>
+      </div>
+    </div>
+
+    <!-- AI Loader -->
+    <div class="ai-loader" id="ai-loader">
+      <div class="spinner"></div>
+      <div>
+        <div style="font-weight:600;font-size:14px;margin-bottom:2px">AI is writing your report...</div>
+        <div style="font-size:12px">Analyzing incidents, calculating metrics, and structuring the report.</div>
+      </div>
+    </div>
+
+    <!-- Report output -->
+    <div id="report-out" style="display:none">
+      <div class="report-box" id="report-text"></div>
+      <div class="report-actions">
+        <button class="btn btn-ghost" onclick="copyReport()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          <span id="copy-label">Copy report</span>
+        </button>
+      </div>
+      <div class="info-box">Paste this directly into Slack, WhatsApp, or email to your manager.</div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════ SETTINGS TAB ═══════════════════════════════ -->
+  <div id="pane-settings" class="pane">
+    <div class="card">
+      <div class="card-title">AI configuration</div>
+      <div class="card-sub">Paste your Anthropic API key to enable AI-powered report generation. The key is stored only in your browser — it never leaves your device.</div>
+
+      <div class="apikey-row">
+        <div class="field">
+          <label>Anthropic API key</label>
+          <input type="password" id="api-key-input" placeholder="sk-ant-api03-...">
+        </div>
+        <button class="btn btn-blue" style="margin-bottom:14px" onclick="saveApiKey()">Save key</button>
+      </div>
+      <div id="api-status" class="api-status"></div>
+
+      <hr class="divider">
+
+      <div class="card-title" style="margin-bottom:6px">Report defaults</div>
+      <div class="card-sub">Pre-fill your name so you don't have to type it every time.</div>
+      <div class="g2">
+        <div class="field">
+          <label>Your name</label>
+          <input type="text" id="s-name" placeholder="Ahmed">
+        </div>
+        <div class="field">
+          <label>Default manager name</label>
+          <input type="text" id="s-manager" placeholder="e.g. Karthik">
+        </div>
+      </div>
+      <button class="btn btn-blue" onclick="saveSettings()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        Save settings
+      </button>
+      <span id="settings-flash" class="flash ok" style="margin-left:12px"></span>
+
+      <hr class="divider">
+
+      <div class="card-title" style="margin-bottom:6px;color:var(--red)">Danger zone</div>
+      <div class="card-sub">Clear all stored incidents. This cannot be undone.</div>
+      <button class="btn btn-danger" onclick="clearAll()">Clear all incidents</button>
+    </div>
+  </div>
+
+</div><!-- /shell -->
+
+<script>
+const STORE_KEY = 'feelvaleo_dod_v2';
+const SETTINGS_KEY = 'feelvaleo_dod_settings';
+let orders = [];
+let settings = { name: '', manager: '', apiKey: '' };
+
+// ── Bootstrap ──────────────────────────────────────────────────────
+function loadData() {
+  try { orders = JSON.parse(localStorage.getItem(STORE_KEY) || '[]'); } catch(e){}
+  try { settings = Object.assign(settings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')); } catch(e){}
+}
+
 function saveData() {
-  const date = document.getElementById("date").value;
-  let saved = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
-  saved[date] = orders;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(orders)); } catch(e){}
 }
 
+function saveSettings() {
+  settings.name = v('s-name');
+  settings.manager = v('s-manager');
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch(e){}
+  flash2('Settings saved.', 'settings-flash');
+}
+
+function saveApiKey() {
+  const key = v('api-key-input');
+  if (!key.startsWith('sk-ant')) { setApiStatus('Invalid key format. Should start with sk-ant-', false); return; }
+  settings.apiKey = key;
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch(e){}
+  setApiStatus('API key saved.', true);
+}
+
+function setApiStatus(msg, ok) {
+  const el = document.getElementById('api-status');
+  el.textContent = msg;
+  el.className = 'api-status ' + (ok ? 'ok' : 'err');
+}
+
+function initUI() {
+  document.getElementById('header-date').textContent = new Date().toLocaleDateString('en-GB', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+  if (settings.name) document.getElementById('s-name').value = settings.name;
+  if (settings.manager) document.getElementById('s-manager').value = settings.manager;
+  if (settings.apiKey) { document.getElementById('api-key-input').value = settings.apiKey; setApiStatus('API key loaded.', true); }
+  document.getElementById('cnt-badge').textContent = orders.length;
+  document.getElementById('r-date').value = new Date().toISOString().split('T')[0];
+}
+
+// ── Helpers ────────────────────────────────────────────────────────
+function v(id) { return (document.getElementById(id)?.value || '').trim(); }
+function g(id) { return document.getElementById(id); }
+
+function flash(msg, ok) {
+  const el = g('flash');
+  el.textContent = msg;
+  el.className = 'flash ' + (ok ? 'ok' : 'err');
+  setTimeout(() => el.textContent = '', 3000);
+}
+
+function flash2(msg, id) {
+  const el = g(id);
+  el.textContent = msg;
+  setTimeout(() => el.textContent = '', 3000);
+}
+
+function calcMins(t1, t2) {
+  if (!t1 || !t2) return 0;
+  const [h1,m1] = t1.split(':').map(Number);
+  const [h2,m2] = t2.split(':').map(Number);
+  let d = (h2*60+m2)-(h1*60+m1);
+  return d < 0 ? d + 1440 : d;
+}
+
+function pad(n) { return String(n).padStart(2,'0'); }
+
+// ── Tabs ───────────────────────────────────────────────────────────
+function showTab(id, el) {
+  document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  g('pane-' + id).classList.add('active');
+  el.classList.add('active');
+  if (id === 'review') renderList();
+  if (id === 'report') {
+    g('no-orders-warn').style.display = orders.length === 0 ? '' : 'none';
+    if (settings.name) g('r-name').value = settings.name;
+    if (settings.manager) g('r-manager').value = settings.manager;
+  }
+}
+
+// ── Delay toggle ───────────────────────────────────────────────────
+function toggleDelay() {
+  const late = v('f-status') === 'late';
+  g('delay-block').classList.toggle('dimmed', !late);
+}
+
+// ── Add order ──────────────────────────────────────────────────────
 function addOrder() {
-  const order = {
-    id: document.getElementById("orderId").value,
-    delay: parseInt(document.getElementById("delay").value) || 0,
-    reason: document.getElementById("reason").value,
-    action: document.getElementById("action").value,
-    notes: document.getElementById("notes").value,
-    noshow: document.getElementById("noshow").checked
-  };
-
-  orders.push(order);
+  const id = v('f-id');
+  if (!id) { flash('Please enter an Order ID.', false); return; }
+  const status = v('f-status');
+  const sched = v('f-sched');
+  const actual = v('f-actual');
+  let mins = parseInt(v('f-mins')) || 0;
+  if (status === 'late' && !mins && sched && actual) mins = calcMins(sched, actual);
+  const reason = [v('f-reason'), v('f-reason-detail')].filter(Boolean).join(' — ');
+  const action = [v('f-action'), v('f-action-detail')].filter(Boolean).join(' — ');
+  const notes = v('f-notes');
+  const partner = v('f-partner');
+  const idx = orders.findIndex(o => o.id === id);
+  const entry = { id, status, sched, actual, mins, reason, action, notes, partner, ts: Date.now() };
+  if (idx >= 0) {
+    if (!confirm('Order ' + id + ' already logged. Update it?')) return;
+    orders[idx] = entry;
+    flash('Order ' + id + ' updated.', true);
+  } else {
+    orders.push(entry);
+    flash('Order ' + id + ' saved.', true);
+  }
   saveData();
-  renderTable();
+  g('cnt-badge').textContent = orders.length;
+  clearForm();
 }
 
-function renderTable() {
-  const table = document.getElementById("ordersTable");
-  table.innerHTML = `
-    <tr>
-      <th>Order</th>
-      <th>Delay</th>
-      <th>Reason</th>
-      <th>Action</th>
-      <th>No Show</th>
-    </tr>
-  `;
+function clearForm() {
+  ['f-id','f-sched','f-actual','f-mins','f-reason-detail','f-action-detail','f-notes','f-partner'].forEach(id => { if(g(id)) g(id).value = ''; });
+  g('f-status').value = 'on_time';
+  if(g('f-reason')) g('f-reason').value = '';
+  if(g('f-action')) g('f-action').value = '';
+  toggleDelay();
+}
 
-  orders.forEach(o => {
-    table.innerHTML += `
-      <tr>
-        <td>${o.id}</td>
-        <td>${o.delay}</td>
-        <td>${o.reason}</td>
-        <td>${o.action}</td>
-        <td>${o.noshow ? "Yes" : "No"}</td>
-      </tr>
-    `;
+function deleteOrder(id) {
+  if (!confirm('Remove order ' + id + '?')) return;
+  orders = orders.filter(o => o.id !== id);
+  saveData();
+  g('cnt-badge').textContent = orders.length;
+  renderList();
+}
+
+function clearAll() {
+  if (!confirm('Clear ALL logged incidents? This cannot be undone.')) return;
+  orders = [];
+  saveData();
+  g('cnt-badge').textContent = 0;
+  renderList();
+}
+
+// ── Render list ────────────────────────────────────────────────────
+function renderList() {
+  const total = orders.length;
+  const lateList = orders.filter(o => o.status === 'late');
+  const late = lateList.length;
+  const pct = total ? Math.round((total - late) / total * 100) : null;
+  const delays = lateList.filter(o => o.mins > 0).map(o => o.mins);
+  const avg = delays.length ? Math.round(delays.reduce((a,b) => a+b,0) / delays.length) : null;
+
+  g('m-total').textContent = total;
+  g('m-late').textContent = late;
+  g('m-pct').textContent = pct !== null ? pct + '%' : '--';
+  g('m-pct').className = 'metric-val ' + (pct === null ? '' : pct >= 80 ? 'green' : 'red');
+  g('m-avg').textContent = avg !== null ? avg + ' min' : '--';
+
+  const el = g('order-list');
+  if (!total) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">📋</div><h3>No incidents logged yet</h3><p>Go to the Log Incident tab to start adding orders.</p></div>';
+    return;
+  }
+
+  const sorted = [...orders].sort((a,b) => a.id.localeCompare(b.id));
+  el.innerHTML = `
+    <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>Order ID</th><th>Status</th><th>Partner</th><th>Reason</th><th>Action</th><th></th>
+      </tr></thead>
+      <tbody>
+      ${sorted.map(o => {
+        const isLate = o.status === 'late';
+        const badge = isLate
+          ? `<span class="badge-late"><span class="badge-dot" style="background:var(--red)"></span>Late${o.mins ? ' +'+o.mins+'m':''}</span>`
+          : `<span class="badge-ok"><span class="badge-dot" style="background:var(--green)"></span>On time</span>`;
+        return `<tr>
+          <td class="td-id">${o.id}</td>
+          <td>${badge}</td>
+          <td class="td-cell">${o.partner || '—'}</td>
+          <td class="td-cell">${o.reason || (isLate ? 'Not specified':'N/A')}</td>
+          <td class="td-cell">${o.action || (isLate ? 'Not specified':'N/A')}</td>
+          <td class="td-del"><button onclick="deleteOrder('${o.id}')" title="Remove">✕</button></td>
+        </tr>`;
+      }).join('')}
+      </tbody>
+    </table>
+    </div>`;
+}
+
+// ── Plain report ───────────────────────────────────────────────────
+function generatePlainReport() {
+  if (!orders.length) { g('no-orders-warn').style.display = ''; return; }
+  const date = v('r-date') || new Date().toISOString().split('T')[0];
+  const name = v('r-name') || 'Operations';
+  const shift = v('r-shift');
+  const notes = v('r-notes');
+  const total = orders.length;
+  const lateOrders = orders.filter(o => o.status === 'late').sort((a,b) => a.id.localeCompare(b.id));
+  const onTimeOrders = orders.filter(o => o.status === 'on_time').sort((a,b) => a.id.localeCompare(b.id));
+  const late = lateOrders.length;
+  const onTime = total - late;
+  const pct = total ? Math.round(onTime/total*100) : 0;
+  const delays = lateOrders.filter(o => o.mins > 0).map(o => o.mins);
+  const avg = delays.length ? Math.round(delays.reduce((a,b)=>a+b,0)/delays.length) : null;
+
+  let r = '';
+  r += '===============================================\n';
+  r += '     DAILY OPERATIONS DELAY (DOD) REPORT\n';
+  r += '===============================================\n';
+  r += `Date         : ${date}\n`;
+  r += `Shift        : ${shift}\n`;
+  r += `Prepared by  : ${name}\n`;
+  r += '-----------------------------------------------\n\n';
+  r += 'SUMMARY\n-------\n';
+  r += `Total orders     : ${total}\n`;
+  r += `On-time orders   : ${onTime}\n`;
+  r += `Late orders      : ${late}\n`;
+  r += `On-time rate     : ${pct}%\n`;
+  if (avg) r += `Average delay    : ${avg} minutes\n`;
+  if (notes) r += `\nGENERAL NOTES\n-------------\n${notes}\n`;
+  r += '\n-----------------------------------------------\n\n';
+  if (lateOrders.length) {
+    r += 'DELAYED ORDERS\n--------------\n';
+    lateOrders.forEach((o,i) => {
+      r += `\n[${pad(i+1)}] Order ID   : ${o.id}\n`;
+      if (o.partner) r += `     Partner    : ${o.partner}\n`;
+      if (o.sched)   r += `     Scheduled  : ${o.sched}\n`;
+      if (o.actual)  r += `     Actual     : ${o.actual}\n`;
+      if (o.mins)    r += `     Delay      : ${o.mins} minutes\n`;
+      r += `     Reason     : ${o.reason || 'Not specified'}\n`;
+      r += `     Action     : ${o.action || 'Not specified'}\n`;
+      if (o.notes)   r += `     Notes      : ${o.notes}\n`;
+    });
+    r += '\n';
+  }
+  if (onTimeOrders.length) {
+    r += '-----------------------------------------------\n';
+    r += 'ON-TIME ORDERS\n--------------\n';
+    onTimeOrders.forEach(o => r += `  - ${o.id}${o.partner ? ' ('+o.partner+')':''}${o.notes ? ' — '+o.notes:''}\n`);
+    r += '\n';
+  }
+  r += '===============================================\n';
+  r += `Generated : ${new Date().toLocaleString('en-GB')}\n`;
+  r += '===============================================';
+
+  g('report-text').textContent = r;
+  g('report-out').style.display = '';
+}
+
+// ── AI report ─────────────────────────────────────────────────────
+async function generateAIReport() {
+  if (!orders.length) { g('no-orders-warn').style.display = ''; return; }
+
+  const apiKey = settings.apiKey;
+  if (!apiKey) {
+    alert('No API key found. Go to the Settings tab and add your Anthropic API key first.');
+    return;
+  }
+
+  const date = v('r-date') || new Date().toISOString().split('T')[0];
+  const name = v('r-name') || 'Ahmed';
+  const shift = v('r-shift');
+  const manager = v('r-manager') || 'the team';
+  const notes = v('r-notes');
+
+  const total = orders.length;
+  const lateOrders = orders.filter(o => o.status === 'late');
+  const late = lateOrders.length;
+  const onTime = total - late;
+  const pct = total ? Math.round(onTime/total*100) : 0;
+  const delays = lateOrders.filter(o => o.mins > 0).map(o => o.mins);
+  const avg = delays.length ? Math.round(delays.reduce((a,b)=>a+b,0)/delays.length) : null;
+
+  const rawData = JSON.stringify(orders, null, 2);
+
+  const prompt = `You are an operations reporting assistant at Feelvaleo, a healthcare and home services company in Saudi Arabia. Your job is to write a polished, professional Daily Operations Delay (DOD) report.
+
+Here are the raw incident logs for ${date} (data may be messy or incomplete — clean it up):
+
+${rawData}
+
+Report metadata:
+- Date: ${date}
+- Shift: ${shift}
+- Prepared by: ${name}
+- Recipient: ${manager}
+- Total orders: ${total}
+- On-time: ${onTime}
+- Late: ${late}
+- On-time rate: ${pct}%
+${avg ? `- Average delay: ${avg} minutes` : ''}
+${notes ? `- Additional notes from ops executive: ${notes}` : ''}
+
+Write a professional DOD report with the following structure:
+1. A short executive summary paragraph (3–4 sentences max) that highlights the key numbers, standout issues, and overall day performance.
+2. A clean SUMMARY section with the key metrics in a formatted table or aligned text.
+3. A DELAYED ORDERS DETAIL section — for each delayed order, list: Order ID, partner/provider (if available), scheduled vs actual time, delay in minutes, root cause (clean up messy input), and action taken.
+4. If there are patterns (e.g. same partner delayed multiple times, same reason recurring), add a PATTERNS & OBSERVATIONS section.
+5. Recommended next steps or escalations if relevant.
+6. A clean ON-TIME ORDERS section listing order IDs.
+
+Write in a clear, formal but direct tone. Clean up any messy or shorthand input in the data. Do not use markdown formatting — use plain text only with headers in ALL CAPS. Output only the report text, no preamble.`;
+
+  g('btn-ai-report').disabled = true;
+  g('btn-plain-report').disabled = true;
+  g('ai-loader').classList.add('show');
+  g('report-out').style.display = 'none';
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 2000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    const data = await res.json();
+
+    if (data.error) {
+      alert('API error: ' + data.error.message);
+      return;
+    }
+
+    const text = data.content?.[0]?.text || 'No response received.';
+    g('report-text').textContent = text;
+    g('report-out').style.display = '';
+
+  } catch(err) {
+    alert('Request failed: ' + err.message);
+  } finally {
+    g('btn-ai-report').disabled = false;
+    g('btn-plain-report').disabled = false;
+    g('ai-loader').classList.remove('show');
+  }
+}
+
+// ── Copy ───────────────────────────────────────────────────────────
+function copyReport() {
+  navigator.clipboard.writeText(g('report-text').textContent).then(() => {
+    g('copy-label').textContent = 'Copied!';
+    setTimeout(() => g('copy-label').textContent = 'Copy report', 2500);
   });
 }
 
-// Clear current day
-function clearDay() {
-  if (!confirm("Clear all data for this day?")) return;
-
-  const date = document.getElementById("date").value;
-  let saved = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
-
-  delete saved[date];
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
-
-  orders = [];
-  renderTable();
-  document.getElementById("report").innerText = "";
-}
-
-// Update data when date changes
-document.getElementById("date").addEventListener("change", () => {
-  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
-  const date = document.getElementById("date").value;
-
-  orders = saved[date] || [];
-  renderTable();
-});
-
-function formatDate(dateStr) {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric"
-  }).replace(/ /g, "-");
-}
-
-function generateReport() {
-  const manager = document.getElementById("manager").value;
-  const date = formatDate(document.getElementById("date").value);
-  const total = parseInt(document.getElementById("totalOrders").value) || 0;
-  const generalNotes = document.getElementById("generalNotes").value;
-
-  const lateOrders = orders.filter(o => o.delay > 0 && !o.noshow);
-  const noShows = orders.filter(o => o.noshow);
-
-  const lateCount = lateOrders.length;
-  const onTime = total - lateCount - noShows.length;
-  const percent = total ? Math.round((onTime / total) * 100) : 0;
-
-  let report = `@${manager}
-Date: ${date}
-Total babysitting orders: ${total}
-Count of late: ${lateCount}
-`;
-
-  if (noShows.length > 0) {
-    report += `${noShows.length} Order${noShows.length > 1 ? "s" : ""}: No show\n`;
-  }
-
-  report += `% of on time: ${percent}%\n\n`;
-
-  if (lateOrders.length > 0) {
-    report += `Reason for late:\n\n`;
-    lateOrders.forEach(o => {
-      report += `${o.delay} minutes late - ${o.id} - ${o.reason}. ${o.action} ${o.notes}\n\n`;
-    });
-  }
-
-  if (noShows.length > 0) {
-    report += `Outlier Order${noShows.length > 1 ? "s" : ""}: No show\n\n`;
-    noShows.forEach(o => {
-      report += `${o.id} - ${o.reason}. ${o.action} ${o.notes}\n\n`;
-    });
-  }
-
-  if (generalNotes) {
-    report += generalNotes;
-  }
-
-  document.getElementById("report").innerText = report;
-}
-
-function copyReport() {
-  const text = document.getElementById("report").innerText;
-  navigator.clipboard.writeText(text);
-  alert("Copied!");
-}
+// ── Init ───────────────────────────────────────────────────────────
+loadData();
+initUI();
 </script>
+</body>
+</html>
