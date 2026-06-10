@@ -384,7 +384,7 @@
       <div class="btn-row">
         <button class="btn btn-ai" id="btn-ai-report" onclick="generateAIReport()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-          Generate AI Report
+          Generate AI Report (GPT-4o)
         </button>
         <button class="btn btn-ghost" id="btn-plain-report" onclick="generatePlainReport()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
@@ -419,12 +419,12 @@
   <div id="pane-settings" class="pane">
     <div class="card">
       <div class="card-title">AI configuration</div>
-      <div class="card-sub">Paste your Anthropic API key to enable AI-powered report generation. The key is stored only in your browser — it never leaves your device.</div>
+      <div class="card-sub">Paste your OpenAI API key to enable AI-powered report generation. Get your key at <strong>platform.openai.com/api-keys</strong>. The key is stored only in your browser — it never leaves your device.</div>
 
       <div class="apikey-row">
         <div class="field">
-          <label>Anthropic API key</label>
-          <input type="password" id="api-key-input" placeholder="sk-ant-api03-...">
+          <label>OpenAI API key</label>
+          <input type="password" id="api-key-input" placeholder="sk-proj-...">
         </div>
         <button class="btn btn-blue" style="margin-bottom:14px" onclick="saveApiKey()">Save key</button>
       </div>
@@ -485,10 +485,10 @@ function saveSettings() {
 
 function saveApiKey() {
   const key = v('api-key-input');
-  if (!key.startsWith('sk-ant')) { setApiStatus('Invalid key format. Should start with sk-ant-', false); return; }
+  if (!key.startsWith('sk-')) { setApiStatus('Invalid key format. OpenAI keys start with sk-', false); return; }
   settings.apiKey = key;
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch(e){}
-  setApiStatus('API key saved.', true);
+  setApiStatus('OpenAI API key saved.', true);
 }
 
 function setApiStatus(msg, ok) {
@@ -719,7 +719,7 @@ async function generateAIReport() {
 
   const apiKey = settings.apiKey;
   if (!apiKey) {
-    alert('No API key found. Go to the Settings tab and add your Anthropic API key first.');
+    alert('No OpenAI API key found. Go to the Settings tab and paste your key first.');
     return;
   }
 
@@ -758,14 +758,14 @@ ${avg ? `- Average delay: ${avg} minutes` : ''}
 ${notes ? `- Additional notes from ops executive: ${notes}` : ''}
 
 Write a professional DOD report with the following structure:
-1. A short executive summary paragraph (3–4 sentences max) that highlights the key numbers, standout issues, and overall day performance.
-2. A clean SUMMARY section with the key metrics in a formatted table or aligned text.
-3. A DELAYED ORDERS DETAIL section — for each delayed order, list: Order ID, partner/provider (if available), scheduled vs actual time, delay in minutes, root cause (clean up messy input), and action taken.
+1. A short executive summary paragraph (3-4 sentences max) that highlights the key numbers, standout issues, and overall day performance.
+2. A clean SUMMARY section with the key metrics in formatted aligned text.
+3. A DELAYED ORDERS DETAIL section — for each delayed order, list: Order ID, partner/provider (if available), scheduled vs actual time, delay in minutes, root cause (clean up any messy input), and action taken.
 4. If there are patterns (e.g. same partner delayed multiple times, same reason recurring), add a PATTERNS & OBSERVATIONS section.
 5. Recommended next steps or escalations if relevant.
 6. A clean ON-TIME ORDERS section listing order IDs.
 
-Write in a clear, formal but direct tone. Clean up any messy or shorthand input in the data. Do not use markdown formatting — use plain text only with headers in ALL CAPS. Output only the report text, no preamble.`;
+Write in a clear, formal but direct tone. Clean up any messy or shorthand input in the data. Do not use markdown — plain text only, headers in ALL CAPS. Output only the report text, no preamble or commentary.`;
 
   g('btn-ai-report').disabled = true;
   g('btn-plain-report').disabled = true;
@@ -773,29 +773,41 @@ Write in a clear, formal but direct tone. Clean up any messy or shorthand input 
   g('report-out').style.display = 'none';
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    // OpenAI API — CORS-enabled for browser use
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + apiKey
+      },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'gpt-4o',
         max_tokens: 2000,
-        messages: [{ role: 'user', content: prompt }]
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a professional operations reporting assistant. Write clear, structured, plain-text reports. No markdown, no preamble.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ]
       })
     });
 
-    const data = await res.json();
-
-    if (data.error) {
-      alert('API error: ' + data.error.message);
-      return;
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.error?.message || `HTTP ${res.status} — check your API key.`);
     }
 
-    const text = data.content?.[0]?.text || 'No response received.';
+    const data = await res.json();
+    const text = data.choices?.[0]?.message?.content || 'No response received.';
     g('report-text').textContent = text;
     g('report-out').style.display = '';
 
   } catch(err) {
-    alert('Request failed: ' + err.message);
+    alert('OpenAI API error: ' + err.message + '\n\nCheck:\n1. API key is correct in Settings\n2. You have OpenAI credits\n3. Your internet connection is working');
   } finally {
     g('btn-ai-report').disabled = false;
     g('btn-plain-report').disabled = false;
